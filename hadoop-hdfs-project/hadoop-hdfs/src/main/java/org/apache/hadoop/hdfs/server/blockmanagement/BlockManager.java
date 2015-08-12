@@ -91,7 +91,7 @@ import org.apache.hadoop.hdfs.server.protocol.ReceivedDeletedBlockInfo;
 import org.apache.hadoop.hdfs.server.protocol.StorageReceivedDeletedBlocks;
 import org.apache.hadoop.hdfs.util.LightWeightLinkedSet;
 import org.apache.hadoop.metrics2.util.MBeans;
-import org.apache.hadoop.io.erasurecode.ECSchema;
+import org.apache.hadoop.hdfs.protocol.ErasureCodingPolicy;
 
 import static org.apache.hadoop.hdfs.protocol.HdfsConstants.BLOCK_STRIPED_CELL_SIZE;
 import static org.apache.hadoop.hdfs.util.StripedBlockUtil.getInternalBlockLength;
@@ -966,14 +966,13 @@ public class BlockManager implements BlockStatsMXBean {
       ErasureCodingZone ecZone)
       throws IOException {
     assert namesystem.hasReadLock();
-    final ECSchema schema = ecZone != null ? ecZone.getSchema() : null;
-    final int cellSize = ecZone != null ? ecZone.getCellSize() : 0;
+    final ErasureCodingPolicy ecPolicy = ecZone != null ? ecZone
+        .getErasureCodingPolicy() : null;
     if (blocks == null) {
       return null;
     } else if (blocks.length == 0) {
       return new LocatedBlocks(0, isFileUnderConstruction,
-          Collections.<LocatedBlock> emptyList(), null, false, feInfo, schema,
-          cellSize);
+          Collections.<LocatedBlock> emptyList(), null, false, feInfo, ecPolicy);
     } else {
       if (LOG.isDebugEnabled()) {
         LOG.debug("blocks = " + java.util.Arrays.asList(blocks));
@@ -998,7 +997,7 @@ public class BlockManager implements BlockStatsMXBean {
       }
       return new LocatedBlocks(fileSizeExcludeBlocksUnderConstruction,
           isFileUnderConstruction, locatedblocks, lastlb, isComplete, feInfo,
-          schema, cellSize);
+          ecPolicy);
     }
   }
 
@@ -1618,7 +1617,7 @@ public class BlockManager implements BlockStatsMXBean {
                   .warn("Failed to get the EC zone for the file {} ", src);
             }
             if (ecZone == null) {
-              blockLog.warn("No EC schema found for the file {}. "
+              blockLog.warn("No erasure coding policy found for the file {}. "
                   + "So cannot proceed for recovery", src);
               // TODO: we may have to revisit later for what we can do better to
               // handle this case.
@@ -1628,7 +1627,7 @@ public class BlockManager implements BlockStatsMXBean {
                 new ExtendedBlock(namesystem.getBlockPoolId(), block),
                 rw.srcNodes, rw.targets,
                 ((ErasureCodingWork) rw).liveBlockIndicies,
-                ecZone.getSchema(), ecZone.getCellSize());
+                ecZone.getErasureCodingPolicy());
           } else {
             rw.srcNodes[0].addBlockToBeReplicated(block, targets);
           }
