@@ -273,6 +273,12 @@
   </property>
 
   <property>
+    <description>The expiry interval for node IP caching. -1 disables the caching</description>
+    <name>yarn.resourcemanager.node-ip-cache.expiry-interval-secs</name>
+    <value>-1</value>
+  </property>
+
+  <property>
     <description>Number of threads to handle resource tracker calls.</description>
     <name>yarn.resourcemanager.resource-tracker.client.thread-count</name>
     <value>50</value>
@@ -343,9 +349,12 @@
 
   <property>
     <description>Should YARN fail fast if it encounters any errors.
+      This is a global config for all other components including RM,NM etc.
+      If no value is set for component-specific config (e.g yarn.resourcemanager.fail-fast),
+      this value will be the default.
     </description>
     <name>yarn.fail-fast</name>
-    <value>true</value>
+    <value>false</value>
   </property>
 
   <property>
@@ -1309,6 +1318,17 @@
   </property>
 
   <property>
+    <description>The low threshold percentage of disk space used when a bad disk is
+    marked as good. Values can range from 0.0 to 100.0. This applies to
+    yarn-nodemanager.local-dirs and yarn.nodemanager.log-dirs.
+    Note that if its value is more than yarn.nodemanager.disk-health-checker.
+    max-disk-utilization-per-disk-percentage or not set, it will be set to the same value as
+    yarn.nodemanager.disk-health-checker.max-disk-utilization-per-disk-percentage.</description>
+    <name>yarn.nodemanager.disk-health-checker.disk-utilization-watermark-low-per-disk-percentage</name>
+    <value></value>
+  </property>
+
+  <property>
     <description>The minimum space that must be available on a disk for
     it to be used. This applies to yarn-nodemanager.local-dirs and 
     yarn.nodemanager.log-dirs.</description>
@@ -1560,6 +1580,14 @@
     </description>
     <name>yarn.nodemanager.container-metrics.period-ms</name>
     <value>-1</value>
+  </property>
+
+  <property>
+    <description>
+    The delay time ms to unregister container metrics after completion.
+    </description>
+    <name>yarn.nodemanager.container-metrics.unregister-delay-ms</name>
+    <value>10000</value>
   </property>
 
   <property>
@@ -1817,7 +1845,7 @@
 
   <property>
     <description>
-    Default maximum number of retires for timeline servive client
+    Default maximum number of retries for timeline service client
     and value -1 means no limit.
     </description>
     <name>yarn.timeline-service.client.max-retries</name>
@@ -2086,12 +2114,94 @@
   <property>
     <description>
     Set configuration type for node labels. Administrators can specify
-    "centralized" or "distributed".
+    "centralized", "delegated-centralized" or "distributed".
     </description>
     <name>yarn.node-labels.configuration-type</name>
     <value>centralized</value>
   </property>
 
+  <!-- Distributed Node Labels Configuration -->
+  <property>
+    <description>
+    When node labels "yarn.node-labels.configuration-type" is
+    of type "distributed" Administrators can configure the source of the
+    node labels provider by configuring this parameter. Administrators can
+    specify either "config" or the class name of the provider. Configured
+    class needs to extend
+    org.apache.hadoop.yarn.server.nodemanager.nodelabels.NodeLabelsProvider.
+    If "config" is specified then, "ConfigurationNodeLabelsProvider" will
+    be used.
+    </description>
+    <name>yarn.nodemanager.node-labels.provider</name>
+  </property>
+
+  <property>
+    <description>
+    When node labels "yarn.nodemanager.node-labels.provider" is of type
+    "config" or the configured class extends AbstractNodeLabelsProvider then
+    periodically node labels are retrieved from the node labels provider.
+    This configuration is to define the interval. If -1 is configured then
+    node labels are retrieved from. provider only during initialization.
+    Defaults to 10 mins.
+    </description>
+    <name>yarn.nodemanager.node-labels.provider.fetch-interval-ms</name>
+    <value>600000</value>
+  </property>
+
+  <property>
+    <description>
+   Interval at which node labels syncs with RM from NM.Will send loaded labels
+   every x intervals configured along with heartbeat from NM to RM.
+    </description>
+    <name>yarn.nodemanager.node-labels.resync-interval-ms</name>
+    <value>120000</value>
+  </property>
+
+  <property>
+    <description>
+    When node labels "yarn.nodemanager.node-labels.provider"
+    is of type "config" then ConfigurationNodeLabelsProvider fetches the
+    labels this parameter.
+    </description>
+    <name>yarn.nodemanager.node-labels.provider.configured-node-labels</name>
+  </property>
+
+  <property>
+    <description>
+    When node labels "yarn.nodemanager.node-labels.provider" is a class
+    which extends AbstractNodeLabelsProvider then this configuration provides
+    the timeout period after which it will stop querying the Node labels
+    provider. Defaults to 20 mins.
+    </description>
+    <name>yarn.nodemanager.node-labels.provider.fetch-timeout-ms</name>
+    <value>1200000</value>
+  </property>
+
+  <!-- Delegated-centralized Node Labels Configuration -->
+  <property>
+    <description>
+    When node labels "yarn.node-labels.configuration-type" is
+    of type "delegated-centralized", administrators should configure
+    the class for fetching node labels by ResourceManager. Configured
+    class needs to extend
+    org.apache.hadoop.yarn.server.resourcemanager.nodelabels.
+    RMNodeLabelsMappingProvider.
+    </description>
+    <name>yarn.resourcemanager.node-labels.provider</name>
+    <value></value>
+  </property>
+
+  <property>
+    <description>
+    When node labels "yarn.node-labels.configuration-type" is of type
+    "delegated-centralized" then periodically node labels are retrieved
+    from the node labels provider. This configuration is to define the
+    interval. If -1 is configured then node labels are retrieved from
+    provider only once for each node after it registers. Defaults to 30 mins.
+    </description>
+    <name>yarn.resourcemanager.node-labels.provider.fetch-interval-ms</name>
+    <value>1800000</value>
+  </property>
   <!-- Other Configuration -->
 
   <property>
@@ -2179,4 +2289,80 @@
     <value>0</value>
   </property>
 
+  <property>
+    <description>
+    The default log aggregation policy class. Applications can
+    override it via LogAggregationContext. This configuration can provide
+    some cluster-side default behavior so that if the application doesn't
+    specify any policy via LogAggregationContext administrators of the cluster
+    can adjust the policy globally.
+    </description>
+    <name>yarn.nodemanager.log-aggregation.policy.class</name>
+    <value>org.apache.hadoop.yarn.server.nodemanager.containermanager.logaggregation.AllContainerLogAggregationPolicy</value>
+  </property>
+
+  <property>
+    <description>
+    The default parameters for the log aggregation policy. Applications can
+    override it via LogAggregationContext. This configuration can provide
+    some cluster-side default behavior so that if the application doesn't
+    specify any policy via LogAggregationContext administrators of the cluster
+    can adjust the policy globally.
+    </description>
+    <name>yarn.nodemanager.log-aggregation.policy.parameters</name>
+    <value></value>
+  </property>
+
+  <property>
+    <description>
+    Enable/Disable AMRMProxyService in the node manager. This service is used to intercept
+    calls from the application masters to the resource manager.
+    </description>
+    <name>yarn.nodemanager.amrmproxy.enable</name>
+    <value>false</value>
+  </property>
+
+  <property>
+    <description>
+    The address of the AMRMProxyService listener.
+    </description>
+    <name>yarn.nodemanager.amrmproxy.address</name>
+    <value>0.0.0.0:8048</value>
+  </property>
+
+  <property>
+    <description>
+    The number of threads used to handle requests by the AMRMProxyService.
+    </description>
+    <name>yarn.nodemanager.amrmproxy.client.thread-count</name>
+    <value>25</value>
+  </property>
+
+  <property>
+    <description>
+    The comma separated list of class names that implement the RequestInterceptor interface. This is used by the
+    AMRMProxyService to create the request processing pipeline for applications.
+    </description>
+    <name>yarn.nodemanager.amrmproxy.interceptor-class.pipeline</name>
+    <value>org.apache.hadoop.yarn.server.nodemanager.amrmproxy.DefaultRequestInterceptor</value>
+  </property>
+
+ <property>
+    <description>
+    Enable/disable blacklisting of hosts for AM based on AM failures on those
+    hosts.
+    </description>
+    <name>yarn.am.blacklisting.enabled</name>
+    <value>true</value>
+  </property>
+
+  <property>
+    <description>
+    Threshold of ratio number of NodeManager hosts that are allowed to be
+    blacklisted for AM. Beyond this ratio there is no blacklisting to avoid
+    danger of blacklisting the entire cluster.
+    </description>
+    <name>yarn.am.blacklisting.disable-failure-threshold</name>
+    <value>0.8f</value>
+  </property>
 </configuration>

@@ -37,7 +37,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.UnsupportedFileSystemException;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.SecretManager.InvalidToken;
-import org.apache.hadoop.util.NodeHealthScriptRunner;
 import org.apache.hadoop.yarn.api.ContainerManagementProtocol;
 import org.apache.hadoop.yarn.api.protocolrecords.GetContainerStatusesRequest;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
@@ -73,6 +72,8 @@ import org.apache.hadoop.yarn.server.nodemanager.security.NMTokenSecretManagerIn
 import org.apache.hadoop.yarn.server.security.ApplicationACLsManager;
 import org.junit.After;
 import org.junit.Before;
+
+import static org.mockito.Mockito.spy;
 
 public abstract class BaseContainerManagerTest {
 
@@ -149,7 +150,7 @@ public abstract class BaseContainerManagerTest {
   protected ContainerExecutor createContainerExecutor() {
     DefaultContainerExecutor exec = new DefaultContainerExecutor();
     exec.setConf(conf);
-    return exec;
+    return spy(exec);
   }
 
   @Before
@@ -192,7 +193,7 @@ public abstract class BaseContainerManagerTest {
       createContainerManager(DeletionService delSrvc) {
     
     return new ContainerManagerImpl(context, exec, delSrvc, nodeStatusUpdater,
-      metrics, new ApplicationACLsManager(conf), dirsHandler) {
+      metrics, dirsHandler) {
       @Override
       public void
           setBlockNewContainerRequests(boolean blockNewContainerRequests) {
@@ -210,12 +211,13 @@ public abstract class BaseContainerManagerTest {
         // do nothing
       }
       @Override
-        protected void authorizeStartRequest(
-            NMTokenIdentifier nmTokenIdentifier,
-            ContainerTokenIdentifier containerTokenIdentifier) throws YarnException {
-          // do nothing
-        }
-      
+      protected void authorizeStartAndResourceIncreaseRequest(
+          NMTokenIdentifier nmTokenIdentifier,
+          ContainerTokenIdentifier containerTokenIdentifier,
+          boolean startRequest) throws YarnException {
+        // do nothing
+      }
+
       @Override
         protected void updateNMTokenIdentifier(
             NMTokenIdentifier nmTokenIdentifier) throws InvalidToken {
@@ -311,4 +313,34 @@ public abstract class BaseContainerManagerTest {
         app.getApplicationState().equals(finalState));
   }
 
+  public static void waitForNMContainerState(ContainerManagerImpl
+      containerManager, ContainerId containerID,
+          org.apache.hadoop.yarn.server.nodemanager.containermanager
+              .container.ContainerState finalState)
+                  throws InterruptedException, YarnException, IOException {
+    waitForNMContainerState(containerManager, containerID, finalState, 20);
+  }
+
+  public static void waitForNMContainerState(ContainerManagerImpl
+      containerManager, ContainerId containerID,
+          org.apache.hadoop.yarn.server.nodemanager.containermanager
+          .container.ContainerState finalState, int timeOutMax)
+              throws InterruptedException, YarnException, IOException {
+    Container container =
+        containerManager.getContext().getContainers().get(containerID);
+    org.apache.hadoop.yarn.server.nodemanager
+        .containermanager.container.ContainerState currentState =
+            container.getContainerState();
+    int timeoutSecs = 0;
+    while (!currentState.equals(finalState)
+        && timeoutSecs++ < timeOutMax) {
+      Thread.sleep(1000);
+      LOG.info("Waiting for NM container to get into state " + finalState
+          + ". Current state is " + currentState);
+      currentState = container.getContainerState();
+    }
+    LOG.info("Container state is " + currentState);
+    Assert.assertEquals("ContainerState is not correct (timedout)",
+        finalState, currentState);
+  }
 }

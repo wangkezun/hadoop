@@ -99,7 +99,7 @@ public class SimulatedFSDataset implements FsDatasetSpi<FsVolumeSpi> {
 
   public static byte simulatedByte(Block b, long offsetInBlk) {
     byte firstByte = (byte) (b.getBlockId() & BYTE_MASK);
-    return (byte) ((firstByte + offsetInBlk) & BYTE_MASK);
+    return (byte) ((firstByte + offsetInBlk % 29) & BYTE_MASK);
   }
   
   public static final String CONFIG_PROPERTY_CAPACITY =
@@ -492,7 +492,7 @@ public class SimulatedFSDataset implements FsDatasetSpi<FsVolumeSpi> {
     }
 
     @Override
-    public void reserveSpaceForRbw(long bytesToReserve) {
+    public void reserveSpaceForReplica(long bytesToReserve) {
     }
 
     @Override

@@ -71,8 +71,13 @@ public class NameNodeAdapter {
   public static HdfsFileStatus getFileInfo(NameNode namenode, String src,
       boolean resolveLink) throws AccessControlException, UnresolvedLinkException,
         StandbyException, IOException {
-    return FSDirStatAndListingOp.getFileInfo(namenode.getNamesystem()
-            .getFSDirectory(), src, resolveLink);
+    namenode.getNamesystem().readLock();
+    try {
+      return FSDirStatAndListingOp.getFileInfo(namenode.getNamesystem()
+          .getFSDirectory(), src, resolveLink);
+    } finally {
+      namenode.getNamesystem().readUnlock();
+    }
   }
   
   public static boolean mkdirs(NameNode namenode, String src,
@@ -243,7 +248,7 @@ public class NameNodeAdapter {
    * @return Replication queue initialization status
    */
   public static boolean safeModeInitializedReplQueues(NameNode nn) {
-    return nn.getNamesystem().isPopulatingReplQueues();
+    return nn.getNamesystem().getBlockManager().isPopulatingReplQueues();
   }
   
   public static File getInProgressEditsFile(StorageDirectory sd, long startTxId) {

@@ -39,6 +39,9 @@ import org.apache.hadoop.yarn.api.ApplicationConstants;
 public class YarnConfiguration extends Configuration {
 
   @Private
+  public static final String DR_CONFIGURATION_FILE= "dynamic-resources.xml";
+
+  @Private
   public static final String CS_CONFIGURATION_FILE= "capacity-scheduler.xml";
 
   @Private
@@ -57,6 +60,7 @@ public class YarnConfiguration extends Configuration {
   @Private
   public static final List<String> RM_CONFIGURATION_FILES =
       Collections.unmodifiableList(Arrays.asList(
+          DR_CONFIGURATION_FILE,
           CS_CONFIGURATION_FILE,
           HADOOP_POLICY_CONFIGURATION_FILE,
           YARN_SITE_CONFIGURATION_FILE,
@@ -149,9 +153,9 @@ public class YarnConfiguration extends Configuration {
   public static final int DEFAULT_RM_AMLAUNCHER_THREAD_COUNT = 50;
 
   /** Retry times to connect with NM.*/
-  public static final String RM_NODEMANAGER_CONNECT_RETIRES =
+  public static final String RM_NODEMANAGER_CONNECT_RETRIES =
       RM_PREFIX + "nodemanager-connect-retries";
-  public static final int DEFAULT_RM_NODEMANAGER_CONNECT_RETIRES = 10;
+  public static final int DEFAULT_RM_NODEMANAGER_CONNECT_RETRIES = 10;
 
   /** The Kerberos principal for the resource manager.*/
   public static final String RM_PRINCIPAL =
@@ -402,7 +406,7 @@ public class YarnConfiguration extends Configuration {
   public static final boolean DEFAULT_RM_RECOVERY_ENABLED = false;
 
   public static final String YARN_FAIL_FAST = YARN_PREFIX + "fail-fast";
-  public static final boolean DEFAULT_YARN_FAIL_FAST = true;
+  public static final boolean DEFAULT_YARN_FAIL_FAST = false;
 
   public static final String RM_FAIL_FAST = RM_PREFIX + "fail-fast";
 
@@ -746,6 +750,11 @@ public class YarnConfiguration extends Configuration {
       + "proxy-user-privileges.enabled";
   public static final boolean DEFAULT_RM_PROXY_USER_PRIVILEGES_ENABLED = false;
 
+  /** The expiry interval for node IP caching. -1 disables the caching */
+  public static final String RM_NODE_IP_CACHE_EXPIRY_INTERVAL_SECS = RM_PREFIX
+      + "node-ip-cache.expiry-interval-secs";
+  public static final int DEFAULT_RM_NODE_IP_CACHE_EXPIRY_INTERVAL_SECS = -1;
+
   /**
    * How many diagnostics/failure messages can be saved in RM for
    * log aggregation. It also defines the number of diagnostics/failure
@@ -999,7 +1008,15 @@ public class YarnConfiguration extends Configuration {
       NM_PREFIX + "container-metrics.period-ms";
   @Private
   public static final int DEFAULT_NM_CONTAINER_METRICS_PERIOD_MS = -1;
-  
+
+  /** The delay time ms to unregister container metrics after completion. */
+  @Private
+  public static final String NM_CONTAINER_METRICS_UNREGISTER_DELAY_MS =
+      NM_PREFIX + "container-metrics.unregister-delay-ms";
+  @Private
+  public static final int DEFAULT_NM_CONTAINER_METRICS_UNREGISTER_DELAY_MS =
+      10000;
+
   /** Prefix for all node manager disk health checker configs. */
   private static final String NM_DISK_HEALTH_CHECK_PREFIX =
       "yarn.nodemanager.disk-health-checker.";
@@ -1041,6 +1058,18 @@ public class YarnConfiguration extends Configuration {
    */
   public static final float DEFAULT_NM_MAX_PER_DISK_UTILIZATION_PERCENTAGE =
       90.0F;
+
+  /**
+   * The low threshold percentage of disk space used when an offline disk is
+   * marked as online. Values can range from 0.0 to 100.0. The value shouldn't
+   * be more than NM_MAX_PER_DISK_UTILIZATION_PERCENTAGE. If its value is
+   * more than NM_MAX_PER_DISK_UTILIZATION_PERCENTAGE or not set, it will be
+   * set to the same value as NM_MAX_PER_DISK_UTILIZATION_PERCENTAGE.
+   * This applies to nm-local-dirs and nm-log-dirs.
+   */
+  public static final String NM_WM_LOW_PER_DISK_UTILIZATION_PERCENTAGE =
+      NM_DISK_HEALTH_CHECK_PREFIX +
+      "disk-utilization-watermark-low-per-disk-percentage";
 
   /**
    * The minimum space that must be available on a local dir for it to be used.
@@ -1237,6 +1266,12 @@ public class YarnConfiguration extends Configuration {
       NM_RECOVERY_PREFIX + "supervised";
   public static final boolean DEFAULT_NM_RECOVERY_SUPERVISED = false;
 
+  public static final String NM_LOG_AGG_POLICY_CLASS =
+      NM_PREFIX + "log-aggregation.policy.class";
+
+  public static final String NM_LOG_AGG_POLICY_CLASS_PARAMETERS = NM_PREFIX
+      + "log-aggregation.policy.parameters";
+
   ////////////////////////////////
   // Web Proxy Configs
   ////////////////////////////////
@@ -1320,6 +1355,23 @@ public class YarnConfiguration extends Configuration {
    */
   public static final String YARN_APPLICATION_CLASSPATH = YARN_PREFIX
       + "application.classpath";
+
+  public static final String AMRM_PROXY_ENABLED = NM_PREFIX
+      + "amrmproxy.enable";
+  public static final boolean DEFAULT_AMRM_PROXY_ENABLED = false;
+  public static final String AMRM_PROXY_ADDRESS = NM_PREFIX
+      + "amrmproxy.address";
+  public static final int DEFAULT_AMRM_PROXY_PORT = 8048;
+  public static final String DEFAULT_AMRM_PROXY_ADDRESS = "0.0.0.0:"
+      + DEFAULT_AMRM_PROXY_PORT;
+  public static final String AMRM_PROXY_CLIENT_THREAD_COUNT = NM_PREFIX
+      + "amrmproxy.client.thread-count";
+  public static final int DEFAULT_AMRM_PROXY_CLIENT_THREAD_COUNT = 25;
+  public static final String AMRM_PROXY_INTERCEPTOR_CLASS_PIPELINE =
+      NM_PREFIX + "amrmproxy.interceptor-class.pipeline";
+  public static final String DEFAULT_AMRM_PROXY_INTERCEPTOR_CLASS_PIPELINE =
+      "org.apache.hadoop.yarn.server.nodemanager.amrmproxy."
+          + "DefaultRequestInterceptor";
 
   /**
    * Default platform-agnostic CLASSPATH for YARN applications. A
@@ -1947,14 +1999,17 @@ public class YarnConfiguration extends Configuration {
   public static final String NODELABEL_CONFIGURATION_TYPE =
       NODE_LABELS_PREFIX + "configuration-type";
   
-  public static final String CENTALIZED_NODELABEL_CONFIGURATION_TYPE =
+  public static final String CENTRALIZED_NODELABEL_CONFIGURATION_TYPE =
       "centralized";
-  
+
+  public static final String DELEGATED_CENTALIZED_NODELABEL_CONFIGURATION_TYPE =
+      "delegated-centralized";
+
   public static final String DISTRIBUTED_NODELABEL_CONFIGURATION_TYPE =
       "distributed";
   
   public static final String DEFAULT_NODELABEL_CONFIGURATION_TYPE =
-      CENTALIZED_NODELABEL_CONFIGURATION_TYPE;
+      CENTRALIZED_NODELABEL_CONFIGURATION_TYPE;
 
   public static final String MAX_CLUSTER_LEVEL_APPLICATION_PRIORITY =
       YARN_PREFIX + "cluster.max-application-priority";
@@ -1966,6 +2021,82 @@ public class YarnConfiguration extends Configuration {
     return DISTRIBUTED_NODELABEL_CONFIGURATION_TYPE.equals(conf.get(
         NODELABEL_CONFIGURATION_TYPE, DEFAULT_NODELABEL_CONFIGURATION_TYPE));
   }
+
+  @Private
+  public static boolean isCentralizedNodeLabelConfiguration(
+      Configuration conf) {
+    return CENTRALIZED_NODELABEL_CONFIGURATION_TYPE.equals(conf.get(
+        NODELABEL_CONFIGURATION_TYPE, DEFAULT_NODELABEL_CONFIGURATION_TYPE));
+  }
+
+  @Private
+  public static boolean isDelegatedCentralizedNodeLabelConfiguration(
+      Configuration conf) {
+    return DELEGATED_CENTALIZED_NODELABEL_CONFIGURATION_TYPE.equals(conf.get(
+        NODELABEL_CONFIGURATION_TYPE, DEFAULT_NODELABEL_CONFIGURATION_TYPE));
+  }
+
+  private static final String NM_NODE_LABELS_PREFIX = NM_PREFIX
+      + "node-labels.";
+
+  public static final String NM_NODE_LABELS_PROVIDER_CONFIG =
+      NM_NODE_LABELS_PREFIX + "provider";
+
+  // whitelist names for the yarn.nodemanager.node-labels.provider
+  public static final String CONFIG_NODE_LABELS_PROVIDER = "config";
+
+  private static final String NM_NODE_LABELS_PROVIDER_PREFIX =
+      NM_NODE_LABELS_PREFIX + "provider.";
+
+  public static final String NM_NODE_LABELS_RESYNC_INTERVAL =
+      NM_NODE_LABELS_PREFIX + "resync-interval-ms";
+
+  public static final long DEFAULT_NM_NODE_LABELS_RESYNC_INTERVAL =
+      2 * 60 * 1000;
+
+  // If -1 is configured then no timer task should be created
+  public static final String NM_NODE_LABELS_PROVIDER_FETCH_INTERVAL_MS =
+      NM_NODE_LABELS_PROVIDER_PREFIX + "fetch-interval-ms";
+
+  public static final String NM_NODE_LABELS_PROVIDER_FETCH_TIMEOUT_MS =
+      NM_NODE_LABELS_PROVIDER_PREFIX + "fetch-timeout-ms";
+
+  // once in 10 mins
+  public static final long DEFAULT_NM_NODE_LABELS_PROVIDER_FETCH_INTERVAL_MS =
+      10 * 60 * 1000;
+
+  // Twice of default interval time
+  public static final long DEFAULT_NM_NODE_LABELS_PROVIDER_FETCH_TIMEOUT_MS =
+      DEFAULT_NM_NODE_LABELS_PROVIDER_FETCH_INTERVAL_MS * 2;
+
+  public static final String NM_PROVIDER_CONFIGURED_NODE_LABELS =
+      NM_NODE_LABELS_PROVIDER_PREFIX + "configured-node-labels";
+
+  private static final String RM_NODE_LABELS_PREFIX = RM_PREFIX
+      + "node-labels.";
+
+  public static final String RM_NODE_LABELS_PROVIDER_CONFIG =
+      RM_NODE_LABELS_PREFIX + "provider";
+
+  private static final String RM_NODE_LABELS_PROVIDER_PREFIX =
+      RM_NODE_LABELS_PREFIX + "provider.";
+
+  //If -1 is configured then no timer task should be created
+  public static final String RM_NODE_LABELS_PROVIDER_FETCH_INTERVAL_MS =
+      RM_NODE_LABELS_PROVIDER_PREFIX + "fetch-interval-ms";
+
+  //once in 30 mins
+  public static final long DEFAULT_RM_NODE_LABELS_PROVIDER_FETCH_INTERVAL_MS =
+      30 * 60 * 1000;
+
+  public static final String AM_BLACKLISTING_ENABLED =
+      YARN_PREFIX + "am.blacklisting.enabled";
+  public static final boolean DEFAULT_AM_BLACKLISTING_ENABLED = true;
+
+  public static final String AM_BLACKLISTING_DISABLE_THRESHOLD =
+      YARN_PREFIX + "am.blacklisting.disable-failure-threshold";
+  public static final float DEFAULT_AM_BLACKLISTING_DISABLE_THRESHOLD = 0.8f;
+
 
   public YarnConfiguration() {
     super();

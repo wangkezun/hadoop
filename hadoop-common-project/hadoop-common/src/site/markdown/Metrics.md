@@ -192,6 +192,7 @@ Each metrics record contains tags such as ProcessName, SessionId, and Hostname a
 | `PutImageNumOps` | Total number of fsimage uploads to SecondaryNameNode |
 | `PutImageAvgTime` | Average fsimage upload time in milliseconds |
 | `TotalFileOps`| Total number of file operations performed |
+| `NNStartedTimeInMillis`| NameNode start time in milliseconds |
 
 FSNamesystem
 ------------
@@ -237,6 +238,8 @@ Each metrics record contains tags such as HAState and Hostname as additional inf
 | `HAState` | (HA-only) Current state of the NameNode: initializing or active or standby or stopping state |
 | `FSState` | Current state of the file system: Safemode or Operational |
 | `LockQueueLength` | Number of threads waiting to acquire FSNameSystem lock |
+| `TotalSyncCount` | Total number of sync operations performed by edit log |
+| `TotalSyncTimes` | Total number of milliseconds spent by various edit logs in sync operation|
 
 JournalNode
 -----------
@@ -271,6 +274,7 @@ The server-side metrics for a journal from the JournalNode's perspective. Each m
 | `CurrentLagTxns` | The number of transactions that this JournalNode is lagging |
 | `LastWrittenTxId` | The highest transaction id stored on this JournalNode |
 | `LastPromisedEpoch` | The last epoch number which this node has promised not to accept any lower epoch, or 0 if no promises have been made |
+| `LastJournalTimestamp` | The timestamp of last successfully written transaction |
 
 datanode
 --------

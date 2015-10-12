@@ -62,6 +62,7 @@ import org.apache.hadoop.yarn.server.resourcemanager.metrics.SystemMetricsPublis
 import org.apache.hadoop.yarn.server.resourcemanager.monitor.SchedulingEditPolicy;
 import org.apache.hadoop.yarn.server.resourcemanager.monitor.SchedulingMonitor;
 import org.apache.hadoop.yarn.server.resourcemanager.nodelabels.RMNodeLabelsManager;
+import org.apache.hadoop.yarn.server.resourcemanager.nodelabels.RMDelegatedNodeLabelsUpdater;
 import org.apache.hadoop.yarn.server.resourcemanager.recovery.NullRMStateStore;
 import org.apache.hadoop.yarn.server.resourcemanager.recovery.RMStateStore;
 import org.apache.hadoop.yarn.server.resourcemanager.recovery.RMStateStore.RMState;
@@ -440,6 +441,13 @@ public class ResourceManager extends CompositeService implements Recoverable {
       addService(nlm);
       rmContext.setNodeLabelManager(nlm);
 
+      RMDelegatedNodeLabelsUpdater delegatedNodeLabelsUpdater =
+          createRMDelegatedNodeLabelsUpdater();
+      if (delegatedNodeLabelsUpdater != null) {
+        addService(delegatedNodeLabelsUpdater);
+        rmContext.setRMDelegatedNodeLabelsUpdater(delegatedNodeLabelsUpdater);
+      }
+
       boolean isRecoveryEnabled = conf.getBoolean(
           YarnConfiguration.RECOVERY_ENABLED,
           YarnConfiguration.DEFAULT_RM_RECOVERY_ENABLED);
@@ -605,7 +613,9 @@ public class ResourceManager extends CompositeService implements Recoverable {
       if (rmContext != null) {
         RMStateStore store = rmContext.getStateStore();
         try {
-          store.close();
+          if (null != store) {
+            store.close();
+          }
         } catch (Exception e) {
           LOG.error("Error closing store.", e);
         }
@@ -1109,6 +1119,20 @@ public class ResourceManager extends CompositeService implements Recoverable {
 
   protected RMSecretManagerService createRMSecretManagerService() {
     return new RMSecretManagerService(conf, rmContext);
+  }
+
+  /**
+   * Create RMDelegatedNodeLabelsUpdater based on configuration.
+   */
+  protected RMDelegatedNodeLabelsUpdater createRMDelegatedNodeLabelsUpdater() {
+    if (conf.getBoolean(YarnConfiguration.NODE_LABELS_ENABLED,
+            YarnConfiguration.DEFAULT_NODE_LABELS_ENABLED)
+        && YarnConfiguration.isDelegatedCentralizedNodeLabelConfiguration(
+            conf)) {
+      return new RMDelegatedNodeLabelsUpdater(rmContext);
+    } else {
+      return null;
+    }
   }
 
   @Private

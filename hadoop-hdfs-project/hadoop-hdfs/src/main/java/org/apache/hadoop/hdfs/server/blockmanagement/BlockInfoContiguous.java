@@ -25,7 +25,6 @@ import org.apache.hadoop.hdfs.protocol.Block;
  */
 @InterfaceAudience.Private
 public class BlockInfoContiguous extends BlockInfo {
-  public static final BlockInfoContiguous[] EMPTY_ARRAY = {};
 
   public BlockInfoContiguous(short size) {
     super(size);
@@ -33,15 +32,6 @@ public class BlockInfoContiguous extends BlockInfo {
 
   public BlockInfoContiguous(Block blk, short size) {
     super(blk, size);
-  }
-
-  /**
-   * Copy construction.
-   * This is used to convert BlockReplicationInfoUnderConstruction
-   * @param from BlockReplicationInfo to copy from.
-   */
-  protected BlockInfoContiguous(BlockInfoContiguous from) {
-    super(from);
   }
 
   /**
@@ -63,7 +53,7 @@ public class BlockInfoContiguous extends BlockInfo {
   }
 
   @Override
-  boolean addStorage(DatanodeStorageInfo storage) {
+  boolean addStorage(DatanodeStorageInfo storage, Block reportedBlock) {
     // find the last null node
     int lastNode = ensureCapacity(1);
     setStorageInfo(lastNode, storage);
@@ -107,17 +97,12 @@ public class BlockInfoContiguous extends BlockInfo {
   }
 
   @Override
-  void replaceBlock(BlockInfo newBlock) {
-    assert newBlock instanceof BlockInfoContiguous;
-    for (int i = this.numNodes() - 1; i >= 0; i--) {
-      final DatanodeStorageInfo storage = this.getStorageInfo(i);
-      final boolean removed = storage.removeBlock(this);
-      assert removed : "currentBlock not found.";
+  public final boolean isStriped() {
+    return false;
+  }
 
-      final DatanodeStorageInfo.AddBlockResult result = storage.addBlock(
-          newBlock);
-      assert result == DatanodeStorageInfo.AddBlockResult.ADDED :
-          "newBlock already exists.";
-    }
+  @Override
+  final boolean hasNoStorage() {
+    return getStorageInfo(0) == null;
   }
 }

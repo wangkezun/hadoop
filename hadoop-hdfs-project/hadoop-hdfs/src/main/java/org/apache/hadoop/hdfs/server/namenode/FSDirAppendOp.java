@@ -106,6 +106,13 @@ final class FSDirAppendOp {
                 + clientMachine);
       }
       final INodeFile file = INodeFile.valueOf(inode, path, true);
+
+      // not support appending file with striped blocks
+      if (file.isStriped()) {
+        throw new UnsupportedOperationException(
+            "Cannot append to files with striped block " + src);
+      }
+
       BlockManager blockManager = fsd.getBlockManager();
       final BlockStoragePolicy lpPolicy = blockManager
           .getStoragePolicy("LAZY_PERSIST");
@@ -245,7 +252,7 @@ final class FSDirAppendOp {
     final BlockInfo lastBlock = file.getLastBlock();
     if (lastBlock != null) {
       final long diff = file.getPreferredBlockSize() - lastBlock.getNumBytes();
-      final short repl = file.getPreferredBlockReplication();
+      final short repl = lastBlock.getReplication();
       delta.addStorageSpace(diff * repl);
       final BlockStoragePolicy policy = fsn.getFSDirectory()
           .getBlockStoragePolicySuite().getPolicy(file.getStoragePolicyID());

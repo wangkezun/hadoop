@@ -89,7 +89,7 @@ class FSDirConcatOp {
   private static void verifyTargetFile(FSDirectory fsd, final String target,
       final INodesInPath targetIIP) throws IOException {
     // check the target
-    if (fsd.getEZForPath(targetIIP) != null) {
+    if (FSDirEncryptionZoneOp.getEZForPath(fsd, targetIIP) != null) {
       throw new HadoopIllegalArgumentException(
           "concat can not be called for files in an encryption zone.");
     }
@@ -144,6 +144,7 @@ class FSDirConcatOp {
         throw new HadoopIllegalArgumentException("concat: source file " + src
             + " is invalid or empty or underConstruction");
       }
+
       // source file's preferred block size cannot be greater than the target
       // file
       if (srcINodeFile.getPreferredBlockSize() >
@@ -152,6 +153,11 @@ class FSDirConcatOp {
             + " has preferred block size " + srcINodeFile.getPreferredBlockSize()
             + " which is greater than the target file's preferred block size "
             + targetINode.getPreferredBlockSize());
+      }
+      // TODO currently we do not support concatenating EC files
+      if (srcINodeFile.isStriped()) {
+        throw new HadoopIllegalArgumentException("concat: the src file " + src
+            + " is with striped blocks");
       }
       si.add(srcINodeFile);
     }
@@ -170,7 +176,7 @@ class FSDirConcatOp {
     QuotaCounts deltas = new QuotaCounts.Builder().build();
     final short targetRepl = target.getPreferredBlockReplication();
     for (INodeFile src : srcList) {
-      short srcRepl = src.getPreferredBlockReplication();
+      short srcRepl = src.getFileReplication();
       long fileSize = src.computeFileSize();
       if (targetRepl != srcRepl) {
         deltas.addStorageSpace(fileSize * (targetRepl - srcRepl));
@@ -223,7 +229,7 @@ class FSDirConcatOp {
     // the target file can be included in a snapshot
     trgInode.recordModification(targetIIP.getLatestSnapshotId());
     INodeDirectory trgParent = targetIIP.getINode(-2).asDirectory();
-    trgInode.concatBlocks(srcList);
+    trgInode.concatBlocks(srcList, fsd.getBlockManager());
 
     // since we are in the same dir - we can use same parent to remove files
     int count = 0;

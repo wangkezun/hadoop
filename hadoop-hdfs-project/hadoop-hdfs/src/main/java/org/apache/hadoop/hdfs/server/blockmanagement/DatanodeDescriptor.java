@@ -31,21 +31,26 @@ import java.util.Queue;
 import java.util.Set;
 
 import com.google.common.annotations.VisibleForTesting;
-
 import com.google.common.collect.ImmutableList;
+
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.DatanodeID;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
+import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
+import org.apache.hadoop.hdfs.server.common.HdfsServerConstants;
 import org.apache.hadoop.hdfs.server.namenode.CachedBlock;
+import org.apache.hadoop.hdfs.server.protocol.BlockECRecoveryCommand.BlockECRecoveryInfo;
 import org.apache.hadoop.hdfs.server.protocol.BlockReportContext;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeStorage;
+import org.apache.hadoop.hdfs.server.protocol.DatanodeStorage.State;
 import org.apache.hadoop.hdfs.server.protocol.StorageReport;
 import org.apache.hadoop.hdfs.server.protocol.VolumeFailureSummary;
 import org.apache.hadoop.hdfs.util.EnumCounters;
 import org.apache.hadoop.hdfs.util.LightWeightHashSet;
+import org.apache.hadoop.hdfs.protocol.ErasureCodingPolicy;
 import org.apache.hadoop.util.IntrusiveCollection;
 import org.apache.hadoop.util.Time;
 import org.slf4j.Logger;
@@ -221,6 +226,9 @@ public class DatanodeDescriptor extends DatanodeInfo {
   /** A queue of blocks to be replicated by this datanode */
   private final BlockQueue<BlockTargetPair> replicateBlocks =
       new BlockQueue<>();
+  /** A queue of blocks to be erasure coded by this datanode */
+  private final BlockQueue<BlockECRecoveryInfo> erasurecodeBlocks =
+      new BlockQueue<>();
   /** A queue of blocks to be recovered by this datanode */
   private final BlockQueue<BlockInfo> recoverBlocks = new BlockQueue<>();
   /** A set of blocks to be invalidated by this datanode */
@@ -248,7 +256,7 @@ public class DatanodeDescriptor extends DatanodeInfo {
   private boolean disallowed = false;
 
   // The number of replication work pending before targets are determined
-  private int PendingReplicationWithoutTargets = 0;
+  private int pendingReplicationWithoutTargets = 0;
 
   // HB processing can use it to tell if it is the first HB since DN restarted
   private boolean heartbeatedSinceRegistration = false;
@@ -280,7 +288,8 @@ public class DatanodeDescriptor extends DatanodeInfo {
     }
   }
 
-  DatanodeStorageInfo[] getStorageInfos() {
+  @VisibleForTesting
+  public DatanodeStorageInfo[] getStorageInfos() {
     synchronized (storageMap) {
       final Collection<DatanodeStorageInfo> storages = storageMap.values();
       return storages.toArray(new DatanodeStorageInfo[storages.size()]);
@@ -377,6 +386,7 @@ public class DatanodeDescriptor extends DatanodeInfo {
       this.invalidateBlocks.clear();
       this.recoverBlocks.clear();
       this.replicateBlocks.clear();
+      this.erasurecodeBlocks.clear();
     }
     // pendingCached, cached, and pendingUncached are protected by the
     // FSN lock.
@@ -578,16 +588,17 @@ public class DatanodeDescriptor extends DatanodeInfo {
   Iterator<BlockInfo> getBlockIterator() {
     return new BlockIterator(getStorageInfos());
   }
+
   Iterator<BlockInfo> getBlockIterator(final String storageID) {
     return new BlockIterator(getStorageInfo(storageID));
   }
 
   void incrementPendingReplicationWithoutTargets() {
-    PendingReplicationWithoutTargets++;
+    pendingReplicationWithoutTargets++;
   }
 
   void decrementPendingReplicationWithoutTargets() {
-    PendingReplicationWithoutTargets--;
+    pendingReplicationWithoutTargets--;
   }
 
   /**
@@ -596,6 +607,20 @@ public class DatanodeDescriptor extends DatanodeInfo {
   void addBlockToBeReplicated(Block block, DatanodeStorageInfo[] targets) {
     assert(block != null && targets != null && targets.length > 0);
     replicateBlocks.offer(new BlockTargetPair(block, targets));
+  }
+
+  /**
+   * Store block erasure coding work.
+   */
+  void addBlockToBeErasureCoded(ExtendedBlock block,
+      DatanodeDescriptor[] sources, DatanodeStorageInfo[] targets,
+      short[] liveBlockIndices, ErasureCodingPolicy ecPolicy) {
+    assert (block != null && sources != null && sources.length > 0);
+    BlockECRecoveryInfo task = new BlockECRecoveryInfo(block, sources, targets,
+        liveBlockIndices, ecPolicy);
+    erasurecodeBlocks.offer(task);
+    BlockManager.LOG.debug("Adding block recovery task " + task + "to "
+        + getName() + ", current queue size is " + erasurecodeBlocks.size());
   }
 
   /**
@@ -626,7 +651,15 @@ public class DatanodeDescriptor extends DatanodeInfo {
    * The number of work items that are pending to be replicated
    */
   int getNumberOfBlocksToBeReplicated() {
-    return PendingReplicationWithoutTargets + replicateBlocks.size();
+    return pendingReplicationWithoutTargets + replicateBlocks.size();
+  }
+
+  /**
+   * The number of work items that are pending to be replicated
+   */
+  @VisibleForTesting
+  public int getNumberOfBlocksToBeErasureCoded() {
+    return erasurecodeBlocks.size();
   }
 
   /**
@@ -641,6 +674,10 @@ public class DatanodeDescriptor extends DatanodeInfo {
 
   public List<BlockTargetPair> getReplicationCommand(int maxTransfers) {
     return replicateBlocks.poll(maxTransfers);
+  }
+
+  public List<BlockECRecoveryInfo> getErasureCodeCommand(int maxTransfers) {
+    return erasurecodeBlocks.poll(maxTransfers);
   }
 
   public BlockInfo[] getLeaseRecoveryCommand(int maxTransfers) {
@@ -661,17 +698,47 @@ public class DatanodeDescriptor extends DatanodeInfo {
     }
   }
 
+  @VisibleForTesting
+  public boolean containsInvalidateBlock(Block block) {
+    synchronized (invalidateBlocks) {
+      return invalidateBlocks.contains(block);
+    }
+  }
+
   /**
-   * @return Approximate number of blocks currently scheduled to be written 
+   * Find whether the datanode contains good storage of given type to
+   * place block of size <code>blockSize</code>.
+   *
+   * <p>Currently datanode only cares about the storage type, in this
+   * method, the first storage of given type we see is returned.
+   *
+   * @param t requested storage type
+   * @param blockSize requested block size
+   * @return
    */
-  public long getRemaining(StorageType t) {
+  public DatanodeStorageInfo chooseStorage4Block(StorageType t,
+      long blockSize) {
+    final long requiredSize =
+        blockSize * HdfsServerConstants.MIN_BLOCKS_FOR_WRITE;
+    final long scheduledSize = blockSize * getBlocksScheduled(t);
     long remaining = 0;
-    for(DatanodeStorageInfo s : getStorageInfos()) {
-      if (s.getStorageType() == t) {
-        remaining += s.getRemaining();
+    DatanodeStorageInfo storage = null;
+    for (DatanodeStorageInfo s : getStorageInfos()) {
+      if (s.getState() == State.NORMAL &&
+          s.getStorageType() == t) {
+        if (storage == null) {
+          storage = s;
+        }
+        long r = s.getRemaining();
+        if (r >= requiredSize) {
+          remaining += r;
+        }
       }
     }
-    return remaining;    
+    if (requiredSize > remaining - scheduledSize) {
+      return null;
+    }
+    return storage;
   }
 
   /**
@@ -842,6 +909,10 @@ public class DatanodeDescriptor extends DatanodeInfo {
     int repl = replicateBlocks.size();
     if (repl > 0) {
       sb.append(" ").append(repl).append(" blocks to be replicated;");
+    }
+    int ec = erasurecodeBlocks.size();
+    if(ec > 0) {
+      sb.append(" ").append(ec).append(" blocks to be erasure coded;");
     }
     int inval = invalidateBlocks.size();
     if (inval > 0) {

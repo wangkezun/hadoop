@@ -175,7 +175,7 @@ public class SnapshotTestHelper {
    * localName (className@hashCode) parent permission group user
    * 
    * Specific information for different types of INode: 
-   * {@link INodeDirectory}:childrenSize 
+   * {@link INodeDirectory}:childrenSize
    * {@link INodeFile}: fileSize, block list. Check {@link BlockInfo#toString()}
    * and {@link BlockUnderConstructionFeature#toString()} for detailed information.
    * </pre>
@@ -227,8 +227,8 @@ public class SnapshotTestHelper {
           line2 = line2.replaceAll("Quota\\[.*\\]", "Quota[]");
         }
         
-        // skip the specific fields of BlockInfoUnderConstruction when the node
-        // is an INodeFileSnapshot or an INodeFileUnderConstructionSnapshot
+        // skip the specific fields of BlockUnderConstructionFeature when the
+        // node is an INodeFileSnapshot or INodeFileUnderConstructionSnapshot
         if (line1.contains("(INodeFileSnapshot)")
             || line1.contains("(INodeFileUnderConstructionSnapshot)")) {
           line1 = line1.replaceAll(

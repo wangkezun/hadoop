@@ -17,7 +17,7 @@
  */
 package org.apache.hadoop.hdfs;
 
-import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -50,7 +50,6 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.commons.logging.impl.Log4JLogger;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.crypto.CryptoProtocolVersion;
 import org.apache.hadoop.fs.CommonConfigurationKeys;
@@ -177,11 +176,11 @@ public class TestDFSClientRetries {
                                                   InterruptedException { 
     final int writeTimeout = 100; //milliseconds.
     // set a very short write timeout for datanode, so that tests runs fast.
-    conf.setInt(DFSConfigKeys.DFS_DATANODE_SOCKET_WRITE_TIMEOUT_KEY, writeTimeout); 
+    conf.setInt(HdfsClientConfigKeys.DFS_DATANODE_SOCKET_WRITE_TIMEOUT_KEY, writeTimeout);
     // set a smaller block size
     final int blockSize = 10*1024*1024;
     conf.setInt(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, blockSize);
-    conf.setInt(DFSConfigKeys.DFS_CLIENT_MAX_BLOCK_ACQUIRE_FAILURES_KEY, 1);
+    conf.setInt(HdfsClientConfigKeys.DFS_CLIENT_MAX_BLOCK_ACQUIRE_FAILURES_KEY, 1);
     // set a small buffer size
     final int bufferSize = 4096;
     conf.setInt(CommonConfigurationKeys.IO_FILE_BUFFER_SIZE_KEY, bufferSize);
@@ -257,12 +256,12 @@ public class TestDFSClientRetries {
     Mockito.doReturn(
             new HdfsFileStatus(0, false, 1, 1024, 0, 0, new FsPermission(
                 (short) 777), "owner", "group", new byte[0], new byte[0],
-                1010, 0, null, (byte) 0)).when(mockNN).getFileInfo(anyString());
+                1010, 0, null, (byte) 0, null)).when(mockNN).getFileInfo(anyString());
     
     Mockito.doReturn(
             new HdfsFileStatus(0, false, 1, 1024, 0, 0, new FsPermission(
                 (short) 777), "owner", "group", new byte[0], new byte[0],
-                1010, 0, null, (byte) 0))
+                1010, 0, null, (byte) 0, null))
         .when(mockNN)
         .create(anyString(), (FsPermission) anyObject(), anyString(),
             (EnumSetWritable<CreateFlag>) anyObject(), anyBoolean(),
@@ -550,7 +549,7 @@ public class TestDFSClientRetries {
       badBlocks.add(badLocatedBlock);
       return new LocatedBlocks(goodBlockList.getFileLength(), false,
                                badBlocks, null, true,
-                               null);
+                               null, null);
     }
   }
   
@@ -643,7 +642,7 @@ public class TestDFSClientRetries {
       DFSConfigKeys.DFS_DATANODE_MAX_RECEIVER_THREADS_DEFAULT);
     conf.setInt(DFSConfigKeys.DFS_DATANODE_MAX_RECEIVER_THREADS_KEY,
       xcievers);
-    conf.setInt(DFSConfigKeys.DFS_CLIENT_MAX_BLOCK_ACQUIRE_FAILURES_KEY,
+    conf.setInt(HdfsClientConfigKeys.DFS_CLIENT_MAX_BLOCK_ACQUIRE_FAILURES_KEY,
       retries);
     conf.setInt(HdfsClientConfigKeys.Retry.WINDOW_BASE_KEY, timeWin);
     // Disable keepalive
@@ -860,7 +859,7 @@ public class TestDFSClientRetries {
     ClientDatanodeProtocol proxy = null;
 
     try {
-      proxy = DFSUtil.createClientDatanodeProtocolProxy(
+      proxy = DFSUtilClient.createClientDatanodeProtocolProxy(
           fakeDnId, conf, 500, false, fakeBlock);
 
       proxy.getReplicaVisibleLength(new ExtendedBlock("bpid", 1));
@@ -930,7 +929,7 @@ public class TestDFSClientRetries {
 
   public static void namenodeRestartTest(final Configuration conf,
       final boolean isWebHDFS) throws Exception {
-    ((Log4JLogger)DFSClient.LOG).getLogger().setLevel(Level.ALL);
+    GenericTestUtils.setLogLevel(DFSClient.LOG, Level.ALL);
 
     final List<Exception> exceptions = new ArrayList<Exception>();
 

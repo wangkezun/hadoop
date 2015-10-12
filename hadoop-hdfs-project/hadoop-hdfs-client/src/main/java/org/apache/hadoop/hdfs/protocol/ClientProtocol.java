@@ -47,6 +47,7 @@ import org.apache.hadoop.io.EnumSetWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.retry.AtMostOnce;
 import org.apache.hadoop.io.retry.Idempotent;
+import org.apache.hadoop.security.AccessControlException;
 import org.apache.hadoop.security.KerberosInfo;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.security.token.TokenInfo;
@@ -1483,4 +1484,31 @@ public interface ClientProtocol {
    */
   @Idempotent
   EventBatchList getEditsFromTxid(long txid) throws IOException;
+
+  /**
+   * Set an erasure coding policy on a specified path.
+   * @param src The path to set policy on.
+   * @param ecPolicy The erasure coding policy. If null, default policy will
+   *                 be used
+   */
+  @AtMostOnce
+  void setErasureCodingPolicy(String src, ErasureCodingPolicy ecPolicy)
+      throws IOException;
+
+  /**
+   * Get the erasure coding policies loaded in Namenode
+   *
+   * @throws IOException
+   */
+  @Idempotent
+  ErasureCodingPolicy[] getErasureCodingPolicies() throws IOException;
+
+  /**
+   * Get the information about the EC policy for the path
+   *
+   * @param src path to get the info for
+   * @throws IOException
+   */
+  @Idempotent
+  ErasureCodingPolicy getErasureCodingPolicy(String src) throws IOException;
 }

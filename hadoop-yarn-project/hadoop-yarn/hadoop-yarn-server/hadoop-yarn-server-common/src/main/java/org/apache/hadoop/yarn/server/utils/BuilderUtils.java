@@ -200,13 +200,15 @@ public class BuilderUtils {
   }
 
   public static ContainerStatus newContainerStatus(ContainerId containerId,
-      ContainerState containerState, String diagnostics, int exitStatus) {
+      ContainerState containerState, String diagnostics, int exitStatus,
+      Resource capability) {
     ContainerStatus containerStatus = recordFactory
       .newRecordInstance(ContainerStatus.class);
     containerStatus.setState(containerState);
     containerStatus.setContainerId(containerId);
     containerStatus.setDiagnostics(diagnostics);
     containerStatus.setExitStatus(exitStatus);
+    containerStatus.setCapability(capability);
     return containerStatus;
   }
 
@@ -303,6 +305,18 @@ public class BuilderUtils {
     request.setResourceName(hostName);
     request.setCapability(capability);
     request.setNumContainers(numContainers);
+    return request;
+  }
+
+  public static ResourceRequest newResourceRequest(Priority priority,
+      String hostName, Resource capability, int numContainers, String label) {
+    ResourceRequest request =
+        recordFactory.newRecordInstance(ResourceRequest.class);
+    request.setPriority(priority);
+    request.setResourceName(hostName);
+    request.setCapability(capability);
+    request.setNumContainers(numContainers);
+    request.setNodeLabelExpression(label);
     return request;
   }
 

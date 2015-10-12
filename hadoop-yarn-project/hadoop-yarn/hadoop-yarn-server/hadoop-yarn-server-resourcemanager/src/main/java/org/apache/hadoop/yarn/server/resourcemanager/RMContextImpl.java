@@ -34,6 +34,8 @@ import org.apache.hadoop.yarn.event.Dispatcher;
 import org.apache.hadoop.yarn.server.resourcemanager.ahs.RMApplicationHistoryWriter;
 import org.apache.hadoop.yarn.server.resourcemanager.metrics.SystemMetricsPublisher;
 import org.apache.hadoop.yarn.server.resourcemanager.nodelabels.RMNodeLabelsManager;
+import org.apache.hadoop.yarn.server.resourcemanager.nodelabels.RMDelegatedNodeLabelsUpdater;
+import org.apache.hadoop.yarn.server.resourcemanager.placement.PlacementManager;
 import org.apache.hadoop.yarn.server.resourcemanager.recovery.RMStateStore;
 import org.apache.hadoop.yarn.server.resourcemanager.reservation.ReservationSystem;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.RMApp;
@@ -76,7 +78,6 @@ public class RMContextImpl implements RMContext {
    * individual fields.
    */
   public RMContextImpl() {
-
   }
 
   @VisibleForTesting
@@ -400,6 +401,18 @@ public class RMContextImpl implements RMContext {
     activeServiceContext.setNodeLabelManager(mgr);
   }
 
+  @Override
+  public RMDelegatedNodeLabelsUpdater getRMDelegatedNodeLabelsUpdater() {
+    return activeServiceContext.getRMDelegatedNodeLabelsUpdater();
+  }
+
+  @Override
+  public void setRMDelegatedNodeLabelsUpdater(
+      RMDelegatedNodeLabelsUpdater delegatedNodeLabelsUpdater) {
+    activeServiceContext.setRMDelegatedNodeLabelsUpdater(
+        delegatedNodeLabelsUpdater);
+  }
+
   public void setSchedulerRecoveryStartAndWaitTime(long waitTime) {
     activeServiceContext.setSchedulerRecoveryStartAndWaitTime(waitTime);
   }
@@ -437,5 +450,15 @@ public class RMContextImpl implements RMContext {
 
   public void setYarnConfiguration(Configuration yarnConfiguration) {
     this.yarnConfiguration=yarnConfiguration;
+  }
+
+  @Override
+  public PlacementManager getQueuePlacementManager() {
+    return this.activeServiceContext.getQueuePlacementManager();
+  }
+  
+  @Override
+  public void setQueuePlacementManager(PlacementManager placementMgr) {
+    this.activeServiceContext.setQueuePlacementManager(placementMgr);
   }
 }

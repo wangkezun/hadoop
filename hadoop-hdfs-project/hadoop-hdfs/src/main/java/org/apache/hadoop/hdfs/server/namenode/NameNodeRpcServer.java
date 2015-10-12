@@ -84,6 +84,7 @@ import org.apache.hadoop.hdfs.protocol.DSQuotaExceededException;
 import org.apache.hadoop.hdfs.protocol.DatanodeID;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.DirectoryListing;
+import org.apache.hadoop.hdfs.protocol.ErasureCodingPolicy;
 import org.apache.hadoop.hdfs.protocol.EncryptionZone;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.protocol.FSLimitException;
@@ -417,6 +418,10 @@ class NameNodeRpcServer implements NamenodeProtocols {
         FSLimitException.PathComponentTooLongException.class,
         FSLimitException.MaxDirectoryItemsExceededException.class,
         UnresolvedPathException.class);
+    clientRpcServer.setTracer(nn.tracer);
+    if (serviceRpcServer != null) {
+      serviceRpcServer.setTracer(nn.tracer);
+    }
  }
 
   /** Allow access to the client RPC server for testing */
@@ -794,7 +799,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
   public LocatedBlock updateBlockForPipeline(ExtendedBlock block, String clientName)
       throws IOException {
     checkNNStartup();
-    return namesystem.updateBlockForPipeline(block, clientName);
+    return namesystem.bumpBlockGenerationStamp(block, clientName);
   }
 
 
@@ -1421,8 +1426,8 @@ class NameNodeRpcServer implements NamenodeProtocols {
 
   @Override // RefreshAuthorizationPolicyProtocol
   public void refreshUserToGroupsMappings() throws IOException {
-    LOG.info("Refreshing all user-to-groups mappings. Requested by user: " + 
-             getRemoteUser().getShortUserName());
+    LOG.info("Refreshing all user-to-groups mappings. Requested by user: " +
+        getRemoteUser().getShortUserName());
     Groups.getUserToGroupsMappingService().refresh();
   }
 
@@ -1555,7 +1560,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
     }
     namesystem.checkOperation(OperationCategory.WRITE);
     CacheEntryWithPayload cacheEntry = RetryCache.waitForCompletion(retryCache,
-      null);
+        null);
     if (cacheEntry != null && cacheEntry.isSuccess()) {
       return (String) cacheEntry.getPayload();
     }
@@ -1847,6 +1852,23 @@ class NameNodeRpcServer implements NamenodeProtocols {
   }
 
   @Override // ClientProtocol
+  public void setErasureCodingPolicy(String src, ErasureCodingPolicy ecPolicy)
+      throws IOException {
+    checkNNStartup();
+    final CacheEntry cacheEntry = RetryCache.waitForCompletion(retryCache);
+    if (cacheEntry != null && cacheEntry.isSuccess()) {
+      return;
+    }
+    boolean success = false;
+    try {
+      namesystem.setErasureCodingPolicy(src, ecPolicy, cacheEntry != null);
+      success = true;
+    } finally {
+      RetryCache.setState(cacheEntry, success);
+    }
+  }
+
+  @Override // ClientProtocol
   public void setXAttr(String src, XAttr xAttr, EnumSet<XAttrSetFlag> flag)
       throws IOException {
     checkNNStartup();
@@ -2025,20 +2047,32 @@ class NameNodeRpcServer implements NamenodeProtocols {
   public SpanReceiverInfo[] listSpanReceivers() throws IOException {
     checkNNStartup();
     namesystem.checkSuperuserPrivilege();
-    return nn.spanReceiverHost.listSpanReceivers();
+    return nn.tracerConfigurationManager.listSpanReceivers();
   }
 
   @Override // TraceAdminProtocol
   public long addSpanReceiver(SpanReceiverInfo info) throws IOException {
     checkNNStartup();
     namesystem.checkSuperuserPrivilege();
-    return nn.spanReceiverHost.addSpanReceiver(info);
+    return nn.tracerConfigurationManager.addSpanReceiver(info);
   }
 
   @Override // TraceAdminProtocol
   public void removeSpanReceiver(long id) throws IOException {
     checkNNStartup();
     namesystem.checkSuperuserPrivilege();
-    nn.spanReceiverHost.removeSpanReceiver(id);
+    nn.tracerConfigurationManager.removeSpanReceiver(id);
+  }
+
+  @Override // ClientProtocol
+  public ErasureCodingPolicy[] getErasureCodingPolicies() throws IOException {
+    checkNNStartup();
+    return namesystem.getErasureCodingPolicies();
+  }
+
+  @Override // ClientProtocol
+  public ErasureCodingPolicy getErasureCodingPolicy(String src) throws IOException {
+    checkNNStartup();
+    return namesystem.getErasureCodingPolicy(src);
   }
 }
